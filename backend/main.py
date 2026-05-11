@@ -50,6 +50,16 @@ async def load_existing_index():
         print(f"Loaded existing index with {len(search_index.documents)} documents")
 
 
+@app.head("/")
+async def root_head():
+    return {}
+
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
     return FileResponse(os.path.join(os.path.dirname(__file__), "..", "frontend", "index.html"))
