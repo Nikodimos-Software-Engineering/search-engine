@@ -1,4 +1,4 @@
-# DocsSearch Engine
+# Educational Search Engine
 
 A search engine for programming documentation with TF-IDF ranking, built with FastAPI and PostgreSQL.
 
