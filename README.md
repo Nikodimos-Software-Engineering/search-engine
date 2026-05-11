@@ -41,5 +41,12 @@ https://search-engine-jcwt.onrender.com
 ```bash
 cd backend
 pip install -r requirements.txt
+
+# Linux/Mac
 export DATABASE_URL="postgresql://user:pass@localhost:5432/search_engine"
+# Windows (CMD)
+set DATABASE_URL=postgresql://user:pass@localhost:5432/search_engine
+# Windows (PowerShell)
+$env:DATABASE_URL="postgresql://user:pass@localhost:5432/search_engine"
+
 uvicorn main:app --host 0.0.0.0 --port 8000
