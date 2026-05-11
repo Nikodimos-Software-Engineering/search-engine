@@ -27,6 +27,10 @@ A search engine for programming documentation with TF-IDF ranking, built with Fa
 | `DELETE /api/index` | Admin JWT | Clear the index |
 | `GET /api/admin/stats` | Admin JWT | Detailed admin stats |
 
+## Deployment Link
+
+https://search-engine-jcwt.onrender.com
+
 ## Admin Credentials
 
 - Username: `admin`
