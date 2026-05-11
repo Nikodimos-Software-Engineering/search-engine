@@ -133,7 +133,7 @@ function pollStats() {
 function logout() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user_role');
-    window.location.href = 'http://localhost:8000/admin';
+    window.location.href = window.location.origin;
 }
 
 function showLoading(text) {
