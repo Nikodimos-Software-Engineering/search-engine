@@ -1,7 +1,4 @@
 
-### `render.yaml`
-
-```yaml
 services:
   - type: web
     name: docssearch-api
