@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocsSearch</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <title>DocsSearch - Programming Documentation Search</title>
+    <link rel="stylesheet" href="/static/styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -25,23 +24,24 @@
                         <circle cx="11" cy="11" r="8"></circle>
                         <path d="m21 21-4.35-4.35"></path>
                     </svg>
-                    <input type="text" id="searchInput" placeholder="Search documentation..." autocomplete="off">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="Search Python documentation, tutorials, references..." 
+                        autocomplete="off"
+                    >
                     <button id="searchBtn" class="btn-primary">Search</button>
                 </div>
                 <div class="search-hints">
-                    Try: <span class="hint" data-query="list comprehension">list comprehension</span>, 
-                    <span class="hint" data-query="decorators">decorators</span>, 
-                    <span class="hint" data-query="async/await">async/await</span>
+                    Try: <span class="hint" data-query="python list comprehension">list comprehension</span>, 
+                    <span class="hint" data-query="python decorators">decorators</span>, 
+                    <span class="hint" data-query="async await python">async/await</span>
                 </div>
             </div>
 
-            <div class="controls">
-                <div class="crawl-section">
-                    <input type="url" id="crawlUrl" placeholder="https://docs.python.org/3/" value="https://docs.python.org/3/">
-                    <button id="crawlBtn" class="btn-secondary">Crawl Site</button>
-                    <button id="clearBtn" class="btn-danger">Clear Index</button>
-                </div>
+            <div class="stats-bar">
                 <div id="stats" class="stats">No documents indexed yet</div>
+                <a href="/admin" class="admin-link">Admin Login</a>
             </div>
         </header>
 
@@ -51,7 +51,7 @@
                     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
                 </svg>
                 <h2>Ready to Search</h2>
-                <p>Enter a search query above or crawl a documentation site to get started.</p>
+                <p>Enter a search query above to find programming documentation.</p>
             </div>
         </main>
 
@@ -63,6 +63,6 @@
         <div id="toast" class="toast hidden"></div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="/static/app.js"></script>
 </body>
 </html>

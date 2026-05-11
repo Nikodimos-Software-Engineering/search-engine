@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - DocsSearch</title>
+    <link rel="stylesheet" href="/static/admin/admin.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="admin-header">
+            <div class="logo">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <h1>DocsSearch <span class="admin-badge">ADMIN</span></h1>
+            </div>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="panel">
+                <h3>Indexed Documents</h3>
+                <div class="stat-number" id="docCount">-</div>
+                <div class="stat-label">Total pages in index</div>
+            </div>
+            
+            <div class="panel">
+                <h3>Search Queries</h3>
+                <div class="stat-number" id="searchCount">-</div>
+                <div class="stat-label">Total searches performed</div>
+            </div>
+            
+            <div class="panel">
+                <h3>Vocabulary Size</h3>
+                <div class="stat-number" id="vocabCount">-</div>
+                <div class="stat-label">Unique terms indexed</div>
+            </div>
+            
+            <div class="panel">
+                <h3>Avg Response Time</h3>
+                <div class="stat-number" id="avgTime">-</div>
+                <div class="stat-label">Milliseconds per search</div>
+            </div>
+            
+            <div class="panel full-width">
+                <h3>Crawl & Index</h3>
+                <div class="crawl-form">
+                    <input type="url" id="crawlUrl" placeholder="https://docs.python.org/3/" value="https://docs.python.org/3/">
+                    <button id="crawlBtn" class="btn-secondary">Start Crawl</button>
+                </div>
+                <div class="action-buttons">
+                    <button id="clearBtn" class="btn-danger">Clear Index</button>
+                    <a href="/" class="btn-secondary" style="text-decoration:none;">View Public Site</a>
+                </div>
+                <div id="crawlStatus" style="margin-top:1rem;color:var(--text-secondary);font-size:0.875rem;"></div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p id="loadingText">Processing...</p>
+        </div>
+
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="/static/admin/admin.js"></script>
+</body>
+</html>

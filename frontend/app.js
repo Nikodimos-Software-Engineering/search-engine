@@ -1,10 +1,7 @@
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = window.location.origin + '/api';
 
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
-const crawlUrl = document.getElementById('crawlUrl');
-const crawlBtn = document.getElementById('crawlBtn');
-const clearBtn = document.getElementById('clearBtn');
 const resultsContainer = document.getElementById('resultsContainer');
 const emptyState = document.getElementById('emptyState');
 const loading = document.getElementById('loading');
@@ -31,16 +28,6 @@ function setupEventListeners() {
             searchInput.value = hint.dataset.query;
             performSearch();
         });
-    });
-    
-    crawlBtn.addEventListener('click', startCrawl);
-    clearBtn.addEventListener('click', clearIndex);
-    
-    searchInput.addEventListener('input', () => {
-        clearTimeout(searchTimeout);
-        if (searchInput.value.length > 2) {
-            searchTimeout = setTimeout(performSearch, 300);
-        }
     });
 }
 
@@ -78,7 +65,7 @@ function displayResults(results, query) {
         resultsContainer.innerHTML = `
             <div class="empty-state">
                 <h2>No results found</h2>
-                <p>No matches for "${escapeHtml(query)}". Try different keywords or crawl more pages.</p>
+                <p>No matches for "${escapeHtml(query)}". Try different keywords.</p>
             </div>
         `;
         return;
@@ -105,55 +92,6 @@ function showEmptyState() {
     resultsContainer.appendChild(emptyState);
 }
 
-async function startCrawl() {
-    const url = crawlUrl.value.trim();
-    if (!url) {
-        showToast('Please enter a URL to crawl', 'error');
-        return;
-    }
-    
-    showLoading('Crawling in progress... This may take a minute.');
-    
-    try {
-        const response = await fetch(`${API_BASE}/crawl`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, max_pages: 50 })
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Crawl failed');
-        }
-        
-        const data = await response.json();
-        showToast(data.message + ' Check stats for progress.', 'success');
-        
-        pollStats();
-        
-    } catch (error) {
-        showToast(error.message, 'error');
-    } finally {
-        setTimeout(hideLoading, 1000);
-    }
-}
-
-async function clearIndex() {
-    if (!confirm('Are you sure you want to clear all indexed documents?')) return;
-    
-    try {
-        const response = await fetch(`${API_BASE}/index`, { method: 'DELETE' });
-        if (!response.ok) throw new Error('Failed to clear index');
-        
-        showToast('Index cleared successfully', 'success');
-        loadStats();
-        showEmptyState();
-        
-    } catch (error) {
-        showToast(error.message, 'error');
-    }
-}
-
 async function loadStats() {
     try {
         const response = await fetch(`${API_BASE}/stats`);
@@ -161,20 +99,11 @@ async function loadStats() {
         
         stats.textContent = data.index_built 
             ? `${data.total_documents} documents indexed | ${data.vocabulary_size} unique terms`
-            : 'No documents indexed yet - crawl a site to begin';
+            : 'No documents indexed yet - admin needs to crawl a site first';
             
     } catch (error) {
-        stats.textContent = 'API unavailable - is the backend running?';
+        stats.textContent = 'API unavailable';
     }
-}
-
-function pollStats() {
-    let attempts = 0;
-    const interval = setInterval(async () => {
-        await loadStats();
-        attempts++;
-        if (attempts > 30) clearInterval(interval);
-    }, 10000);
 }
 
 function showLoading(text) {
