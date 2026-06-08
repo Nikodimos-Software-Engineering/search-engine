@@ -56,15 +56,7 @@ class SearchIndex:
         finally:
             db.close()
 
-        for doc in documents:
-            content = doc.get("content", "")
-            if len(content) > 50:
-                self.documents.append({
-                    "url": doc["url"],
-                    "title": doc.get("title", ""),
-                    "content": content,
-                    "snippet": content[:300] + "..." if len(content) > 300 else content
-                })
+        self.load_from_db()
 
     def load_from_db(self):
         db = SessionLocal()
@@ -118,6 +110,10 @@ class SearchIndex:
     def search(self, query, top_k=10):
         if not self.is_built or not self.documents:
             return []
+        if self.tfidf_matrix is not None and self.tfidf_matrix.shape[0] != len(self.documents):
+            self.build_index()
+            if not self.is_built:
+                return []
         query_words = self.tokenize(query)
         if not query_words:
             return []
@@ -137,7 +133,7 @@ class SearchIndex:
         results = []
         for idx in top_indices:
             score = float(similarities[idx])
-            if score > 0.001:
+            if score > 0.001 and idx < len(self.documents):
                 doc = self.documents[idx]
                 results.append({
                     "url": doc["url"],
