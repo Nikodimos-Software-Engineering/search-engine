@@ -3,7 +3,7 @@ import json
 import re
 import math
 from collections import Counter, defaultdict
-from database import Document, SessionLocal
+from database import Document, IndexData, SessionLocal
 
 
 class SearchIndex:
@@ -165,27 +165,48 @@ class SearchIndex:
             snippet = snippet + "..."
         return snippet
 
-    def save(self, filepath):
-        data = {
-            "vocabulary": self.vocabulary,
-            "all_words": list(self.all_words),
-            "idf": self.idf.tolist() if self.idf is not None else None,
-            "tfidf_matrix": self.tfidf_matrix.tolist() if self.tfidf_matrix is not None else None
-        }
-        with open(filepath, 'w') as f:
-            json.dump(data, f)
+    def save(self, db=None):
+        close_db = False
+        if db is None:
+            db = SessionLocal()
+            close_db = True
+        try:
+            data = json.dumps({
+                "vocabulary": self.vocabulary,
+                "all_words": list(self.all_words),
+                "idf": self.idf.tolist() if self.idf is not None else None,
+                "tfidf_matrix": self.tfidf_matrix.tolist() if self.tfidf_matrix is not None else None,
+                "is_built": self.is_built
+            })
+            entry = db.query(IndexData).first()
+            if entry:
+                entry.data = data
+            else:
+                entry = IndexData(id=1, data=data)
+                db.add(entry)
+            db.commit()
+        finally:
+            if close_db:
+                db.close()
 
-    def load(self, filepath):
-        import os
-        if not os.path.exists(filepath):
-            return
-        with open(filepath, 'r') as f:
-            data = json.load(f)
-        self.vocabulary = data["vocabulary"]
-        self.all_words = set(data.get("all_words", []))
-        if data["idf"]:
-            self.idf = np.array(data["idf"])
-        if data["tfidf_matrix"]:
-            self.tfidf_matrix = np.array(data["tfidf_matrix"])
-            self.is_built = True
+    def load(self, db=None):
+        close_db = False
+        if db is None:
+            db = SessionLocal()
+            close_db = True
+        try:
+            entry = db.query(IndexData).first()
+            if not entry or not entry.data:
+                return
+            data = json.loads(entry.data)
+            self.vocabulary = data["vocabulary"]
+            self.all_words = set(data.get("all_words", []))
+            self.is_built = data.get("is_built", False)
+            if data.get("idf"):
+                self.idf = np.array(data["idf"])
+            if data.get("tfidf_matrix"):
+                self.tfidf_matrix = np.array(data["tfidf_matrix"])
+        finally:
+            if close_db:
+                db.close()
         self.load_from_db()

@@ -48,6 +48,14 @@ class User(Base):
     role = Column(String(20), default="user")
 
 
+class IndexData(Base):
+    __tablename__ = "index_data"
+
+    id = Column(Integer, primary_key=True)
+    data = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class CrawlJob(Base):
     __tablename__ = "crawl_jobs"
 

@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, HttpUrl
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from database import init_db, get_db, Document, SearchLog, CrawlJob
+from database import init_db, get_db, SessionLocal, Document, SearchLog, CrawlJob, IndexData
 import os
 import time
 
@@ -26,20 +26,18 @@ app.add_middleware(
 
 search_index = SearchIndex()
 crawler = RobotsCompliantCrawler()
-INDEX_FILE = "data/search_index.json"
-last_index_mtime = 0
+last_index_updated_at = None
 
 
-def reload_index_if_needed():
-    global search_index, last_index_mtime
-    if os.path.exists(INDEX_FILE):
-        current_mtime = os.path.getmtime(INDEX_FILE)
-        if current_mtime != last_index_mtime:
-            new_index = SearchIndex()
-            new_index.load(INDEX_FILE)
-            search_index = new_index
-            last_index_mtime = current_mtime
-            print(f"Index reloaded from file ({len(search_index.documents)} docs)")
+def reload_index_if_needed(db):
+    global search_index, last_index_updated_at
+    entry = db.query(IndexData).first()
+    if entry and entry.updated_at != last_index_updated_at:
+        new_index = SearchIndex()
+        new_index.load(db)
+        search_index = new_index
+        last_index_updated_at = entry.updated_at
+        print(f"Index reloaded from database ({len(search_index.documents)} docs)")
 
 
 class CrawlRequest(BaseModel):
@@ -57,12 +55,17 @@ class LoginRequest(BaseModel):
 
 @app.on_event("startup")
 async def load_existing_index():
-    global last_index_mtime
+    global last_index_updated_at
     init_db()
-    if os.path.exists(INDEX_FILE):
-        last_index_mtime = os.path.getmtime(INDEX_FILE)
-        search_index.load(INDEX_FILE)
-        print(f"Loaded existing index with {len(search_index.documents)} documents")
+    db = SessionLocal()
+    try:
+        entry = db.query(IndexData).first()
+        if entry and entry.data:
+            last_index_updated_at = entry.updated_at
+            search_index.load(db)
+            print(f"Loaded index from database ({len(search_index.documents)} docs)")
+    finally:
+        db.close()
 
 
 @app.head("/")
@@ -82,7 +85,7 @@ async def serve_frontend():
 
 @app.post("/api/search")
 async def search(request: SearchRequest, db: Session = Depends(get_db)):
-    reload_index_if_needed()
+    reload_index_if_needed(db)
     if not search_index.is_built:
         raise HTTPException(status_code=400, detail="Index not built yet. Crawl a site first.")
     if not request.query.strip():
@@ -100,7 +103,7 @@ async def search(request: SearchRequest, db: Session = Depends(get_db)):
 
 @app.get("/api/stats")
 async def get_stats(db: Session = Depends(get_db)):
-    reload_index_if_needed()
+    reload_index_if_needed(db)
     total_docs = db.query(Document).count()
     total_searches = db.query(SearchLog).count()
     avg_time = db.query(func.avg(SearchLog.response_time_ms)).scalar()
@@ -160,10 +163,9 @@ async def clear_index(db: Session = Depends(get_db), admin: dict = Depends(get_c
     search_index = SearchIndex()
     db.query(Document).delete()
     db.query(SearchLog).delete()
+    db.query(IndexData).delete()
     db.query(CrawlJob).filter(CrawlJob.status == "pending").delete()
     db.commit()
-    if os.path.exists(INDEX_FILE):
-        os.remove(INDEX_FILE)
     return {"message": "Index cleared"}
 
 
@@ -195,7 +197,7 @@ async def get_admin_stats(db: Session = Depends(get_db), admin: dict = Depends(g
         "vocabulary_size": len(search_index.vocabulary) if search_index.vocabulary else 0,
         "total_searches": total_searches or 0,
         "avg_response_time_ms": round(avg_time, 2) if avg_time else 0,
-        "index_file_exists": os.path.exists(INDEX_FILE)
+        "index_in_db": db.query(IndexData).count() > 0
     }
 
 
