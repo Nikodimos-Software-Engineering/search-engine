@@ -1,3 +1,8 @@
+import asyncio
+import os
+import threading
+import time
+
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -6,8 +11,6 @@ from pydantic import BaseModel, HttpUrl
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import init_db, get_db, SessionLocal, Document, SearchLog, CrawlJob, IndexData
-import os
-import time
 
 from crawler import RobotsCompliantCrawler
 from indexer import SearchIndex
@@ -40,6 +43,64 @@ def reload_index_if_needed(db):
         print(f"Index reloaded from database ({len(search_index.documents)} docs)")
 
 
+async def _process_job(job):
+    crawler_worker = RobotsCompliantCrawler()
+    documents = await crawler_worker.crawl_site(job.url, job.max_pages)
+    index = SearchIndex()
+    index.load_from_db()
+    index.add_documents(documents)
+    index.build_index()
+    index.save()
+    return len(documents)
+
+
+def reset_stuck_jobs():
+    db = SessionLocal()
+    try:
+        stuck = db.query(CrawlJob).filter_by(status="running").all()
+        for job in stuck:
+            job.status = "pending"
+            job.error = "Reset - server restarted while running"
+        db.commit()
+        if stuck:
+            print(f"Reset {len(stuck)} stuck crawl jobs to pending")
+    finally:
+        db.close()
+
+
+def start_worker_thread():
+    def _run():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        print("Worker thread started, polling for crawl jobs...")
+        while True:
+            db = SessionLocal()
+            try:
+                job = db.query(CrawlJob).filter_by(status="pending").order_by(CrawlJob.created_at).first()
+                if job:
+                    job.status = "running"
+                    db.commit()
+                    print(f"Worker processing job {job.id}: crawl {job.url}")
+                    try:
+                        pages = loop.run_until_complete(_process_job(job))
+                        job.status = "completed"
+                        job.pages_crawled = pages
+                        db.commit()
+                        print(f"Job {job.id} complete: {pages} pages indexed")
+                    except Exception as e:
+                        job.status = "failed"
+                        job.error = str(e)
+                        db.commit()
+                        print(f"Job {job.id} failed: {e}")
+                else:
+                    time.sleep(5)
+            finally:
+                db.close()
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+
 class CrawlRequest(BaseModel):
     url: HttpUrl
     max_pages: int = 50
@@ -57,6 +118,7 @@ class LoginRequest(BaseModel):
 async def load_existing_index():
     global last_index_updated_at
     init_db()
+    reset_stuck_jobs()
     db = SessionLocal()
     try:
         entry = db.query(IndexData).first()
@@ -66,6 +128,7 @@ async def load_existing_index():
             print(f"Loaded index from database ({len(search_index.documents)} docs)")
     finally:
         db.close()
+    start_worker_thread()
 
 
 @app.head("/")
