@@ -74,28 +74,32 @@ def start_worker_thread():
         asyncio.set_event_loop(loop)
         print("Worker thread started, polling for crawl jobs...")
         while True:
-            db = SessionLocal()
             try:
-                job = db.query(CrawlJob).filter_by(status="pending").order_by(CrawlJob.created_at).first()
-                if job:
-                    job.status = "running"
-                    db.commit()
-                    print(f"Worker processing job {job.id}: crawl {job.url}")
-                    try:
-                        pages = loop.run_until_complete(_process_job(job))
-                        job.status = "completed"
-                        job.pages_crawled = pages
+                db = SessionLocal()
+                try:
+                    job = db.query(CrawlJob).filter_by(status="pending").order_by(CrawlJob.created_at).first()
+                    if job:
+                        job.status = "running"
                         db.commit()
-                        print(f"Job {job.id} complete: {pages} pages indexed")
-                    except Exception as e:
-                        job.status = "failed"
-                        job.error = str(e)
-                        db.commit()
-                        print(f"Job {job.id} failed: {e}")
-                else:
-                    time.sleep(5)
-            finally:
-                db.close()
+                        print(f"Worker processing job {job.id}: crawl {job.url}")
+                        try:
+                            pages = loop.run_until_complete(_process_job(job))
+                            job.status = "completed"
+                            job.pages_crawled = pages
+                            db.commit()
+                            print(f"Job {job.id} complete: {pages} pages indexed")
+                        except Exception as e:
+                            job.status = "failed"
+                            job.error = str(e)
+                            db.commit()
+                            print(f"Job {job.id} failed: {e}")
+                    else:
+                        time.sleep(5)
+                finally:
+                    db.close()
+            except Exception as e:
+                print(f"Worker error: {e}")
+                time.sleep(5)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
@@ -117,18 +121,21 @@ class LoginRequest(BaseModel):
 @app.on_event("startup")
 async def load_existing_index():
     global last_index_updated_at
-    init_db()
-    reset_stuck_jobs()
-    db = SessionLocal()
     try:
-        entry = db.query(IndexData).first()
-        if entry and entry.data:
-            last_index_updated_at = entry.updated_at
-            search_index.load(db)
-            print(f"Loaded index from database ({len(search_index.documents)} docs)")
-    finally:
-        db.close()
-    start_worker_thread()
+        init_db()
+        reset_stuck_jobs()
+        db = SessionLocal()
+        try:
+            entry = db.query(IndexData).first()
+            if entry and entry.data:
+                last_index_updated_at = entry.updated_at
+                search_index.load(db)
+                print(f"Loaded index from database ({len(search_index.documents)} docs)")
+        finally:
+            db.close()
+        start_worker_thread()
+    except Exception as e:
+        print(f"Startup error: {e}")
 
 
 @app.head("/")

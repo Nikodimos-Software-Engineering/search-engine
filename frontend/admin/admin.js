@@ -38,6 +38,10 @@ async function loadStats() {
             return;
         }
         
+        if (!response.ok) {
+            throw new Error(`Server error (${response.status})`);
+        }
+        
         const data = await response.json();
         
         document.getElementById('docCount').textContent = data.total_documents;
@@ -73,8 +77,14 @@ async function startCrawl() {
         }
         
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Crawl failed');
+            let detail = 'Crawl failed';
+            try {
+                const error = await response.json();
+                detail = error.detail || detail;
+            } catch {
+                detail = `Server error (${response.status})`;
+            }
+            throw new Error(detail);
         }
         
         const data = await response.json();
@@ -105,7 +115,7 @@ async function clearIndex() {
             return;
         }
         
-        if (!response.ok) throw new Error('Failed');
+        if (!response.ok) throw new Error(`Server error (${response.status})`);
         
         showToast('Index cleared', 'success');
         loadStats();
@@ -128,6 +138,9 @@ function pollJobStatus(jobId) {
                 logout();
                 clearInterval(interval);
                 return;
+            }
+            if (!response.ok) {
+                throw new Error(`Server error (${response.status})`);
             }
             const data = await response.json();
             document.getElementById('crawlStatus').textContent =

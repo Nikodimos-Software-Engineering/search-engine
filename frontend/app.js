@@ -45,8 +45,14 @@ async function performSearch() {
         });
         
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Search failed');
+            let detail = 'Search failed';
+            try {
+                const error = await response.json();
+                detail = error.detail || detail;
+            } catch {
+                detail = `Server error (${response.status})`;
+            }
+            throw new Error(detail);
         }
         
         const results = await response.json();
@@ -95,6 +101,9 @@ function showEmptyState() {
 async function loadStats() {
     try {
         const response = await fetch(`${API_BASE}/stats`);
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}`);
+        }
         const data = await response.json();
         
         stats.textContent = data.index_built 

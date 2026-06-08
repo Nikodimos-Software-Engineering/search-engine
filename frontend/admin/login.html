@@ -46,8 +46,14 @@
                 });
                 
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Login failed');
+                    let detail = 'Login failed';
+                    try {
+                        const error = await response.json();
+                        detail = error.detail || detail;
+                    } catch {
+                        detail = `Server error (${response.status})`;
+                    }
+                    throw new Error(detail);
                 }
                 
                 const data = await response.json();
