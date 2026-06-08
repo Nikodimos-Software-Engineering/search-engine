@@ -48,6 +48,19 @@ class User(Base):
     role = Column(String(20), default="user")
 
 
+class CrawlJob(Base):
+    __tablename__ = "crawl_jobs"
+
+    id = Column(Integer, primary_key=True)
+    url = Column(String(500))
+    max_pages = Column(Integer, default=50)
+    status = Column(String(20), default="pending")
+    pages_crawled = Column(Integer, default=0)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 

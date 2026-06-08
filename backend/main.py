@@ -1,11 +1,11 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, HttpUrl
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from database import init_db, get_db, Document, SearchLog
+from database import init_db, get_db, Document, SearchLog, CrawlJob
 import os
 import time
 
@@ -27,6 +27,19 @@ app.add_middleware(
 search_index = SearchIndex()
 crawler = RobotsCompliantCrawler()
 INDEX_FILE = "data/search_index.json"
+last_index_mtime = 0
+
+
+def reload_index_if_needed():
+    global search_index, last_index_mtime
+    if os.path.exists(INDEX_FILE):
+        current_mtime = os.path.getmtime(INDEX_FILE)
+        if current_mtime != last_index_mtime:
+            new_index = SearchIndex()
+            new_index.load(INDEX_FILE)
+            search_index = new_index
+            last_index_mtime = current_mtime
+            print(f"Index reloaded from file ({len(search_index.documents)} docs)")
 
 
 class CrawlRequest(BaseModel):
@@ -44,8 +57,10 @@ class LoginRequest(BaseModel):
 
 @app.on_event("startup")
 async def load_existing_index():
+    global last_index_mtime
     init_db()
     if os.path.exists(INDEX_FILE):
+        last_index_mtime = os.path.getmtime(INDEX_FILE)
         search_index.load(INDEX_FILE)
         print(f"Loaded existing index with {len(search_index.documents)} documents")
 
@@ -67,6 +82,7 @@ async def serve_frontend():
 
 @app.post("/api/search")
 async def search(request: SearchRequest, db: Session = Depends(get_db)):
+    reload_index_if_needed()
     if not search_index.is_built:
         raise HTTPException(status_code=400, detail="Index not built yet. Crawl a site first.")
     if not request.query.strip():
@@ -84,6 +100,7 @@ async def search(request: SearchRequest, db: Session = Depends(get_db)):
 
 @app.get("/api/stats")
 async def get_stats(db: Session = Depends(get_db)):
+    reload_index_if_needed()
     total_docs = db.query(Document).count()
     total_searches = db.query(SearchLog).count()
     avg_time = db.query(func.avg(SearchLog.response_time_ms)).scalar()
@@ -116,21 +133,24 @@ async def get_me(user: dict = Depends(get_current_user)):
 
 @app.post("/api/crawl")
 async def crawl_website(
-    request: CrawlRequest, 
-    background_tasks: BackgroundTasks,
+    request: CrawlRequest,
+    db: Session = Depends(get_db),
     admin: dict = Depends(get_current_admin)
 ):
     url = str(request.url)
-    
+
     if not crawler.can_fetch(url):
         raise HTTPException(status_code=403, detail="Crawling blocked by robots.txt")
-    
-    background_tasks.add_task(perform_crawl, url, request.max_pages)
-    
+
+    job = CrawlJob(url=url, max_pages=request.max_pages, status="pending")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
     return {
-        "message": f"Crawling started for {url}",
-        "pages_crawled": 0,
-        "status": "in_progress"
+        "job_id": job.id,
+        "message": f"Crawl job created for {url}",
+        "status": "pending"
     }
 
 
@@ -140,10 +160,27 @@ async def clear_index(db: Session = Depends(get_db), admin: dict = Depends(get_c
     search_index = SearchIndex()
     db.query(Document).delete()
     db.query(SearchLog).delete()
+    db.query(CrawlJob).filter(CrawlJob.status == "pending").delete()
     db.commit()
     if os.path.exists(INDEX_FILE):
         os.remove(INDEX_FILE)
     return {"message": "Index cleared"}
+
+
+@app.get("/api/crawl/status/{job_id}")
+async def get_crawl_status(job_id: int, db: Session = Depends(get_db)):
+    job = db.query(CrawlJob).filter_by(id=job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {
+        "job_id": job.id,
+        "url": job.url,
+        "status": job.status,
+        "pages_crawled": job.pages_crawled,
+        "error": job.error,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "updated_at": job.updated_at.isoformat() if job.updated_at else None
+    }
 
 
 @app.get("/api/admin/stats")
@@ -160,16 +197,6 @@ async def get_admin_stats(db: Session = Depends(get_db), admin: dict = Depends(g
         "avg_response_time_ms": round(avg_time, 2) if avg_time else 0,
         "index_file_exists": os.path.exists(INDEX_FILE)
     }
-
-
-async def perform_crawl(url, max_pages):
-    global search_index
-    new_crawler = RobotsCompliantCrawler()
-    documents = await new_crawler.crawl_site(url, max_pages)
-    search_index.add_documents(documents)
-    search_index.build_index()
-    search_index.save(INDEX_FILE)
-    print(f"Crawl complete: {len(documents)} pages indexed. Total: {len(search_index.documents)}")
 
 
 @app.get("/admin", response_class=HTMLResponse)

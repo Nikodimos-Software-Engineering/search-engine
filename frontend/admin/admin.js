@@ -58,7 +58,7 @@ async function startCrawl() {
     }
     
     showLoading('Crawling...');
-    document.getElementById('crawlStatus').textContent = 'Crawl in progress...';
+    document.getElementById('crawlStatus').textContent = 'Starting crawl...';
     
     try {
         const response = await fetch(`${API_BASE}/crawl`, {
@@ -79,7 +79,7 @@ async function startCrawl() {
         
         const data = await response.json();
         showToast(data.message, 'success');
-        pollStats();
+        pollJobStatus(data.job_id);
         
     } catch (error) {
         showToast(error.message, 'error');
@@ -117,17 +117,43 @@ async function clearIndex() {
     }
 }
 
-function pollStats() {
+function pollJobStatus(jobId) {
     let attempts = 0;
     const interval = setInterval(async () => {
-        await loadStats();
-        attempts++;
-        document.getElementById('crawlStatus').textContent = `Crawl in progress... (check ${attempts})`;
-        if (attempts > 30) {
+        try {
+            const response = await fetch(`${API_BASE}/crawl/status/${jobId}`, {
+                headers: getAuthHeaders()
+            });
+            if (response.status === 401 || response.status === 403) {
+                logout();
+                clearInterval(interval);
+                return;
+            }
+            const data = await response.json();
+            document.getElementById('crawlStatus').textContent =
+                `Status: ${data.status}${data.pages_crawled ? ` (${data.pages_crawled} pages)` : ''}`;
+
+            if (data.status === 'completed') {
+                clearInterval(interval);
+                document.getElementById('crawlStatus').textContent =
+                    `Completed: ${data.pages_crawled} pages indexed`;
+                loadStats();
+            } else if (data.status === 'failed') {
+                clearInterval(interval);
+                document.getElementById('crawlStatus').textContent =
+                    `Failed: ${data.error || 'Unknown error'}`;
+                showToast('Crawl failed', 'error');
+            }
+            attempts++;
+            if (attempts > 60) {
+                clearInterval(interval);
+                document.getElementById('crawlStatus').textContent = 'Timed out waiting for completion';
+            }
+        } catch (error) {
             clearInterval(interval);
-            document.getElementById('crawlStatus').textContent = 'Crawl complete (or still running in background)';
+            document.getElementById('crawlStatus').textContent = 'Error checking status';
         }
-    }, 10000);
+    }, 5000);
 }
 
 function logout() {
