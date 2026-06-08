@@ -1,9 +1,17 @@
 import httpx
 import time
 from urllib.robotparser import RobotFileParser
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlunparse
 from bs4 import BeautifulSoup
 import asyncio
+
+
+def normalize_url(url):
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    path = parsed.path.rstrip('/')
+    return urlunparse((scheme, netloc, path, parsed.params, parsed.query, parsed.fragment))
 
 
 class RobotsCompliantCrawler:
@@ -46,7 +54,8 @@ class RobotsCompliantCrawler:
         self.last_fetch_time[domain] = time.time()
 
     async def fetch_page(self, url, client):
-        if url in self.visited_urls:
+        normalized = normalize_url(url)
+        if normalized in self.visited_urls:
             return None
         if not self.can_fetch(url):
             print(f"Blocked by robots.txt: {url}")
@@ -55,7 +64,7 @@ class RobotsCompliantCrawler:
         try:
             response = await client.get(url, timeout=30.0, follow_redirects=True)
             response.raise_for_status()
-            self.visited_urls.add(url)
+            self.visited_urls.add(normalized)
             return {"url": str(response.url), "html": response.text, "status": response.status_code}
         except Exception as e:
             print(f"Error fetching {url}: {e}")
@@ -80,7 +89,7 @@ class RobotsCompliantCrawler:
 
     async def crawl_site(self, start_url, max_pages=50):
         results = []
-        to_visit = [start_url]
+        to_visit = [normalize_url(start_url)]
         headers = {"User-Agent": "MySearchBot/1.0 (Educational Search Engine)"}
         async with httpx.AsyncClient(headers=headers) as client:
             while to_visit and len(results) < max_pages:
@@ -91,7 +100,8 @@ class RobotsCompliantCrawler:
                 extracted = self.extract_content(page_data["html"], page_data["url"])
                 results.append(extracted)
                 for link in extracted["links"]:
-                    if link not in self.visited_urls and link not in to_visit:
-                        to_visit.append(link)
+                    normalized_link = normalize_url(link)
+                    if normalized_link not in self.visited_urls and normalized_link not in to_visit:
+                        to_visit.append(normalized_link)
                 to_visit = list(dict.fromkeys(to_visit))[:100]
         return results
